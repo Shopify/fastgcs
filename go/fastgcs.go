@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,9 +21,9 @@ const (
 )
 
 type FastGCS interface {
-	Open(url string) (io.ReadCloser, error)
-	Copy(url, path string) error
-	Read(url string) ([]byte, error)
+	Open(gsURL string) (io.ReadCloser, error)
+	Copy(gsURL, path string) error
+	Read(gsURL string) ([]byte, error)
 }
 
 func New() (FastGCS, error) {
@@ -85,55 +86,104 @@ func (f *fastGCS) findTokenInCache() (*token, error) {
 	return &cache, nil
 }
 
-func (f *fastGCS) Open(url string) (io.ReadCloser, error) {
+func (f *fastGCS) Open(gsURL string) (io.ReadCloser, error) {
 	f.ensureCurrentToken()
 
-	cachePath, err := f.update(url)
+	cachePath, err := f.update(gsURL)
 	if err != nil {
 		return nil, err
 	}
 	return os.Open(cachePath)
 }
 
-func (f *fastGCS) Copy(url, path string) error {
-	cachePath, err := f.update(url)
+func (f *fastGCS) Copy(gsURL, path string) error {
+	cachePath, err := f.update(gsURL)
 	if err != nil {
 		return err
 	}
 	return copyFile(cachePath, path, 0644)
 }
 
-func (f *fastGCS) Read(url string) ([]byte, error) {
-	cachePath, err := f.update(url)
+func (f *fastGCS) Read(gsURL string) ([]byte, error) {
+	cachePath, err := f.update(gsURL)
 	if err != nil {
 		return nil, err
 	}
 	return ioutil.ReadFile(cachePath)
 }
 
-func (f *fastGCS) update(url string) (string, error) {
-	path, err := f.cachePath(url)
+func (f *fastGCS) update(gsURL string) (string, error) {
+	path, err := f.cachePath(gsURL)
 	if err != nil {
 		return "", err
 	}
 	_ = path
-	return "", nil
+
+	url, err := apiFetchURL(gsURL)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", f.token.Token))
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	dst, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
 }
 
 var gsURLRegexp = regexp.MustCompile("^gs://([^/]+)/(.*)$")
 
-func (f *fastGCS) cachePath(url string) (string, error) {
-	match := gsURLRegexp.FindStringSubmatch(url)
-	if match == nil {
-		return "", errors.Errorf("invalid GCS URL: %s", url)
+func (f *fastGCS) cachePath(gsURL string) (string, error) {
+	bucket, object, err := parseGSURL(gsURL)
+	if err != nil {
+		return "", err
 	}
-	bucket := match[1]
-	object := match[2]
 
 	return filepath.Join(
 		f.cacheRoot,
 		fmt.Sprintf("%s--%s", bucket, strings.ReplaceAll(object, "/", "-")),
 	), nil
+}
+
+func apiFetchURL(gsURL string) (string, error) {
+	bucket, object, err := parseGSURL(gsURL)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(
+		"https://storage.googleapis.com/storage/v1/b/%s/o/%s?alt=media",
+		bucket, object,
+	), nil
+}
+
+func parseGSURL(gsURL string) (string, string, error) {
+	match := gsURLRegexp.FindStringSubmatch(gsURL)
+	if match == nil {
+		return "", "", errors.Errorf("invalid GCS URL: %s", gsURL)
+	}
+	bucket := match[1]
+	object := match[2]
+
+	return bucket, object, nil
 }
 
 func copyFile(srcPath, dstPath string, mode fs.FileMode) error {

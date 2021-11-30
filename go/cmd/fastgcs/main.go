@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 
 	fastgcs "github.com/Shopify/fastgcs/go"
@@ -11,5 +13,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fg.Open("gs://neato/foobar")
+	f, err := fg.Open("gs://shopify-dev/zodiac.constellations.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(data))
 }
