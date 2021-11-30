@@ -1,0 +1,5 @@
+#!ruby --disable-gems
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require('fastgcs')
+FastGCS.run_cli(*ARGV)

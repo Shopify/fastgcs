@@ -1,4 +1,4 @@
-#!/usr/bin/ruby --disable-gems
+# frozen_string_literal: true
 
 require('net/http')
 require('json')
@@ -11,6 +11,28 @@ class FastGCS
   ACCESS_TOKENS_DB = File.expand_path("~/.config/gcloud/access_tokens.db")
   CREDENTIAL_CACHE = File.expand_path("~/.config/gcloud/com.shopify.fastgcs.json")
   CACHE = File.expand_path("~/.cache/fastgcs")
+
+  autoload(:VERSION, 'fastgcs/version')
+
+  UsageError = Class.new(StandardError)
+  def self.run_cli(*argv)
+    case argv.shift
+    when 'cat'
+      raise(UsageError) unless argv.size == 1
+      IO.copy_stream(new.open(argv.first), STDOUT)
+    when 'cp'
+      raise(UsageError) unless argv.size == 2
+      new.cp(argv.first, argv[1])
+    else
+      raise(UsageError)
+    end
+  rescue UsageError
+    abort(<<~EOF)
+      usage:
+        #{$PROGRAM_NAME} cp gs://url ./path
+        #{$PROGRAM_NAME} cat gs://url
+    EOF
+  end
 
   def initialize
     FileUtils.mkdir_p(CACHE)
@@ -61,13 +83,17 @@ class FastGCS
         if new_etag
           FileUtils.mv(file, path)
           File.write(etag_path(path), new_etag)
-          STDERR.puts("[FastGCS] updated #{url}")
+          info("updated #{url}")
         else
-          STDERR.puts("[FastGCS] #{url} already current")
+          info("#{url} already current")
         end
       end
     end
     nil
+  end
+
+  def info(msg)
+    STDERR.puts("[FastGCS] #{msg}") if ENV['FASTGCS_LOG']
   end
 
   def etag_path(path)
@@ -80,6 +106,7 @@ class FastGCS
     bucket, object = parse_gs_url(url)
     headers = {
       'Authorization' => "Bearer #{@token}",
+      'Accept-Encoding' => 'gzip;q=1.0',
     }
     headers['If-None-Match'] = etag if etag
     req = Net::HTTP::Get.new("/storage/v1/b/#{bucket}/o/#{object}?alt=media", headers)
