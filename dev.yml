@@ -1,0 +1,6 @@
+up:
+  - ruby: '3.0.2'
+  - bundler
+commands:
+  test: rake test
+  style: rubocop -D

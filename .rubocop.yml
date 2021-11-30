@@ -1,0 +1,19 @@
+inherit_gem:
+  rubocop-shopify: rubocop.yml
+
+AllCops:
+  TargetRubyVersion: 3.0
+
+Style/StringLiterals:
+  EnforcedStyle: single_quotes
+
+Style/MethodCallWithArgsParentheses:
+  Enabled: true
+  IgnoreMacros: false
+  IgnoredMethods: []
+  AllowParenthesesInMultilineCall: true
+  AllowParenthesesInChaining: true
+  AllowParenthesesInCamelCaseMethod: true
+  AllowParenthesesInStringInterpolation: true
+  EnforcedStyle: require_parentheses
+

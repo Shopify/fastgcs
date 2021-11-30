@@ -7,10 +7,10 @@ require('tmpdir')
 require('fileutils')
 
 class FastGCS
-  CREDENTIALS_DB = File.expand_path("~/.config/gcloud/credentials.db")
-  ACCESS_TOKENS_DB = File.expand_path("~/.config/gcloud/access_tokens.db")
-  CREDENTIAL_CACHE = File.expand_path("~/.config/gcloud/com.shopify.fastgcs.json")
-  CACHE = File.expand_path("~/.cache/fastgcs")
+  CREDENTIALS_DB = File.expand_path('~/.config/gcloud/credentials.db')
+  ACCESS_TOKENS_DB = File.expand_path('~/.config/gcloud/access_tokens.db')
+  CREDENTIAL_CACHE = File.expand_path('~/.config/gcloud/com.shopify.fastgcs.json')
+  CACHE = File.expand_path('~/.cache/fastgcs')
 
   autoload(:VERSION, 'fastgcs/version')
 
@@ -59,7 +59,7 @@ class FastGCS
 
   def cache_path(url)
     bucket, object = parse_gs_url(url)
-    File.join(CACHE, "#{bucket}--#{object.tr('/', '-')}")
+    File.join(CACHE, "#{bucket}--#{object.tr("/", "-")}")
   end
 
   def update(url)
@@ -78,7 +78,7 @@ class FastGCS
     end
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'file')
-      File.open(file, File::WRONLY|File::CREAT, 0644) do |f|
+      File.open(file, File::WRONLY | File::CREAT, 0644) do |f|
         new_etag = get(http, url, f, etag: etag)
         if new_etag
           FileUtils.mv(file, path)
@@ -129,7 +129,7 @@ class FastGCS
     # and the valid json document will immediately follow the email address in
     # sqlite3 format and this schema.
     creds_json = credsdb.scan(/@shopify\.com([\x0A\x20-\x7F]+)/).flatten.first
-    creds = JSON.load(creds_json)
+    creds = JSON.parse(creds_json)
     @client_id = creds.fetch('client_id')
     @client_secret = creds.fetch('client_secret')
     @refresh_token = creds.fetch('refresh_token')
@@ -138,7 +138,7 @@ class FastGCS
 
   def parse_gs_url(url)
     unless url.match(%r{^gs://([^/]+)/(.*)$})
-      raise(ArgumentError, "Invalid gs:// URL")
+      raise(ArgumentError, 'Invalid gs:// URL')
     end
     bucket = Regexp.last_match(1)
     object = Regexp.last_match(2)
@@ -151,7 +151,7 @@ class FastGCS
     found = false
     found ||= try_access_token_from_cache
     found ||= try_access_token_from_gcloud_db
-    found ||= refresh_access_token
+    refresh_access_token unless found
 
     update_cache
   end
@@ -167,12 +167,12 @@ class FastGCS
     end
     false
   rescue Errno::ENOENT
-    return(false)
+    (false)
   end
 
   def update_cache
     File.write(CREDENTIAL_CACHE, { token: @token, expiry: @expiry }.to_json)
-    File.open(CREDENTIAL_CACHE, File::WRONLY|File::CREAT, 0600) do |f|
+    File.open(CREDENTIAL_CACHE, File::WRONLY | File::CREAT, 0600) do |f|
       f.write({ token: @token, expiry: @expiry }.to_json)
     end
   end
