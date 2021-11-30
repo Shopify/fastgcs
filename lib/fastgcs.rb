@@ -171,9 +171,8 @@ class FastGCS
   end
 
   def update_cache
-    File.write(CREDENTIAL_CACHE, { token: @token, expiry: @expiry }.to_json)
     File.open(CREDENTIAL_CACHE, File::WRONLY | File::CREAT, 0600) do |f|
-      f.write({ token: @token, expiry: @expiry }.to_json)
+      f.write({ token: @token, expiry: @expiry.iso8601 }.to_json)
     end
   end
 
